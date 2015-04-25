@@ -1,0 +1,183 @@
+---
+title: "Barbell Lift Form Analysis"
+author: "Michael Cincotti"
+---
+
+'''Introduction'''
+
+For this analysis, we are trying to predict the manner (data field "classe") in which people are completing barbell lift exercises based on wearable device data. We have a very large training set of data, with 19622 observations of 160 variables. 
+
+**Data Analysis**
+
+The first thing we need to do is read in the data from our working directory:
+
+```{r warnings = FALSE}
+library(caret)
+library(Hmisc)
+library(splines)
+library(randomForest)
+test_data <- read.csv("pml-testing.csv")
+train_data <- read.csv("pml-training.csv")
+```
+
+Next, I'm going to look for NA values in the data which could cause problems for our models. Based on the output, there are a large number of fields with a large number of NA values (more in the test data than in trainig data). Due to the high frequency of NAs in those fields and the still-high number of fields that will remain, we're going to remove those fields. 
+
+```{r}
+sapply(train_data,function (x) sum(is.na(x)))
+train_data_use <- train_data[,colSums(is.na(test_data))==0]
+```
+Now let's look at a summary of the remaining data. The first seven fields are basic information that should've have a bearing on the exerciser's form so let's remove those. This will leave us with 53 fields. 
+
+```{r}
+train_data_use <- train_data_use[,8:60]
+```
+
+Next, we want to see how each field affects the classe variable. To do that, we cut each variable into 5 "levels" and plot it against classe. Based on that, we can see if there's a correlation between the variable and classe. For example, here's one that appears to be correlated:
+
+```{r}
+plot(cut2(train_data_use$roll_belt,g=5),train_data_use$classe)
+```
+
+And here's one that is not:
+
+```{r}
+plot(cut2(train_data_use$pitch_arm,g=5),train_data_use$classe)
+```
+
+Going through these plots, here is a list of variables that appear to be correlated with classe: roll_belt, magnet_belt_z, accel_arm_x, pitch_forearm, magnet_forearm_x, yaw_dumbbell, gyros_dumbbell_y, magnet_dumbbell_y and roll_forearm. 
+
+**Cross-Validation of Models**
+
+With this information, we will create a tree-based model using those variables. We will also do a Random Forest using all 52 variables and see how well each does at predicting classe. To do this, we'll use cross-validation by splitting up our training data with 75% of the rows becoming the "new" training data and the remaining 25% becoing the "new" test data. We will make 5 random splits in this manner and then see what the average number of correct preditions is across the 5 splits.
+
+```{r}
+split1 <- createDataPartition(y=train_data_use$classe,p=0.75,list=FALSE)
+split2 <- createDataPartition(y=train_data_use$classe,p=0.75,list=FALSE)
+split3 <- createDataPartition(y=train_data_use$classe,p=0.75,list=FALSE)
+split4 <- createDataPartition(y=train_data_use$classe,p=0.75,list=FALSE)
+split5 <- createDataPartition(y=train_data_use$classe,p=0.75,list=FALSE)
+
+#split number one ---------------------------------------------------
+train_1 <- train_data_use[split1,]
+test_1 <- train_data_use[-split1,]
+numbers <- sapply(train_1, function(x) as.double(x))
+train_df <- data.frame(numbers)
+train_df$classe <- train_1$classe
+numbers <- sapply(test_1, function(x) as.double(x))
+test_df <- data.frame(numbers)
+test_df$classe <- test_1$classe
+#tree
+tree1 <- train(classe~yaw_dumbbell+gyros_dumbbell_y+magnet_dumbbell_y+roll_forearm+roll_belt+magnet_belt_z+accel_arm_x+pitch_forearm+magnet_forearm_x,data=train_df,method="rpart")
+tree_pred <- predict(tree1,newdata=test_df)
+tree_table <- table(tree_pred,test_df$classe)
+tree_results1 <- sum(diag(tree_table))/sum(tree_table)
+#random forest
+model1<-randomForest(classe~.,data=train_df,replace=F, nodesize =300,xtest=train_df[,1:52],ytest=train_df[,53],ntree=500,mtry=10,keep.forest = T)
+rf_pred <- predict(model1,test_df)
+rf_table <- table(rf_pred,test_df$classe)
+rf_results1 <- sum(diag(rf_table))/sum(rf_table)
+
+#split number two ---------------------------------------------------
+train_2 <- train_data_use[split2,]
+test_2 <- train_data_use[-split2,]
+numbers <- sapply(train_2, function(x) as.double(x))
+train_df <- data.frame(numbers)
+train_df$classe <- train_2$classe
+numbers <- sapply(test_2, function(x) as.double(x))
+test_df <- data.frame(numbers)
+test_df$classe <- test_2$classe
+#tree
+tree2 <- train(classe~yaw_dumbbell+gyros_dumbbell_y+magnet_dumbbell_y+roll_forearm+roll_belt+magnet_belt_z+accel_arm_x+pitch_forearm+magnet_forearm_x,data=train_df,method="rpart")
+tree_pred <- predict(tree2,newdata=test_df)
+tree_table <- table(tree_pred,test_df$classe)
+tree_results2 <- sum(diag(tree_table))/sum(tree_table)
+#random forest
+model2<-randomForest(classe~.,data=train_df,replace=F, nodesize =300,xtest=train_df[,1:52],ytest=train_df[,53],ntree=500,mtry=10,keep.forest = T)
+rf_pred <- predict(model2,test_df)
+rf_table <- table(rf_pred,test_df$classe)
+rf_results2 <- sum(diag(rf_table))/sum(rf_table)
+
+#split number three ---------------------------------------------------
+train_3 <- train_data_use[split3,]
+test_3 <- train_data_use[-split3,]
+numbers <- sapply(train_3, function(x) as.double(x))
+train_df <- data.frame(numbers)
+train_df$classe <- train_3$classe
+numbers <- sapply(test_3, function(x) as.double(x))
+test_df <- data.frame(numbers)
+test_df$classe <- test_3$classe
+#tree
+tree3 <- train(classe~yaw_dumbbell+gyros_dumbbell_y+magnet_dumbbell_y+roll_forearm+roll_belt+magnet_belt_z+accel_arm_x+pitch_forearm+magnet_forearm_x,data=train_df,method="rpart")
+tree_pred <- predict(tree3,newdata=test_df)
+tree_table <- table(tree_pred,test_df$classe)
+tree_results3 <- sum(diag(tree_table))/sum(tree_table)
+#random forest
+model3<-randomForest(classe~.,data=train_df,replace=F, nodesize =300,xtest=train_df[,1:52],ytest=train_df[,53],ntree=500,mtry=10,keep.forest = T)
+rf_pred <- predict(model3,test_df)
+rf_table <- table(rf_pred,test_df$classe)
+rf_results3 <- sum(diag(rf_table))/sum(rf_table)
+
+#split number four ---------------------------------------------------
+train_4 <- train_data_use[split4,]
+test_4 <- train_data_use[-split4,]
+numbers <- sapply(train_4, function(x) as.double(x))
+train_df <- data.frame(numbers)
+train_df$classe <- train_4$classe
+numbers <- sapply(test_4, function(x) as.double(x))
+test_df <- data.frame(numbers)
+test_df$classe <- test_4$classe
+#tree
+tree4 <- train(classe~yaw_dumbbell+gyros_dumbbell_y+magnet_dumbbell_y+roll_forearm+roll_belt+magnet_belt_z+accel_arm_x+pitch_forearm+magnet_forearm_x,data=train_df,method="rpart")
+tree_pred <- predict(tree4,newdata=test_df)
+tree_table <- table(tree_pred,test_df$classe)
+tree_results4 <- sum(diag(tree_table))/sum(tree_table)
+#random forest
+model4<-randomForest(classe~.,data=train_df,replace=F, nodesize =300,xtest=train_df[,1:52],ytest=train_df[,53],ntree=500,mtry=10,keep.forest = T)
+rf_pred <- predict(model4,test_df)
+rf_table <- table(rf_pred,test_df$classe)
+rf_results4 <- sum(diag(rf_table))/sum(rf_table)
+
+#split number five ---------------------------------------------------
+train_5 <- train_data_use[split5,]
+test_5 <- train_data_use[-split5,]
+numbers <- sapply(train_5, function(x) as.double(x))
+train_df <- data.frame(numbers)
+train_df$classe <- train_5$classe
+numbers <- sapply(test_5, function(x) as.double(x))
+test_df <- data.frame(numbers)
+test_df$classe <- test_5$classe
+#tree
+tree5 <- train(classe~yaw_dumbbell+gyros_dumbbell_y+magnet_dumbbell_y+roll_forearm+roll_belt+magnet_belt_z+accel_arm_x+pitch_forearm+magnet_forearm_x,data=train_df,method="rpart")
+tree_pred <- predict(tree5,newdata=test_df)
+tree_table <- table(tree_pred,test_df$classe)
+tree_results5 <- sum(diag(tree_table))/sum(tree_table)
+#random forest
+model5<-randomForest(classe~.,data=train_df,replace=F, nodesize =300,xtest=train_df[,1:52],ytest=train_df[,53],ntree=500,mtry=10,keep.forest = T)
+rf_pred <- predict(model5,test_df)
+rf_table <- table(rf_pred,test_df$classe)
+rf_results5 <- sum(diag(rf_table))/sum(rf_table)
+
+mean(tree_results1, tree_results2, tree_results3, tree_results4, tree_results5)
+mean(rf_results1, rf_results2, rf_results3, rf_results4, rf_results5)
+```
+
+**The Winner**
+
+Looks like the random forest did much better. So we're going to use that model by training it on the full training set and then predicting on the actual 20 test cases.We also have to make the same updates to the test data as we did to the training data. 
+
+Our predicted success rate is 82%, with an expected error rate of 18%.
+
+```{r}
+
+numbers <- sapply(train_data_use, function(x) as.double(x))
+train_df <- data.frame(numbers)
+train_df$classe <- train_data_use$classe
+model_final<-randomForest(classe~.,data=train_df,replace=F, nodesize =300,xtest=train_df[,1:52],ytest=train_df[,53],ntree=500,mtry=10,keep.forest = T)
+
+test_data_use <- test_data[,colSums(is.na(test_data))==0]
+test_data_use <- test_data_use[,8:60]
+numbers <- sapply(test_data_use, function(x) as.double(x))
+test_df <- data.frame(numbers)
+rf_pred <- predict(model_final,test_df)
+rf_pred
+```
